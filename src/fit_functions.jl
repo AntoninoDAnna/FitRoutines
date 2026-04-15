@@ -77,7 +77,7 @@ function fit_routine(model::Function,
                      corr::Bool = true,
                      W::AbstractArray{Float64}=Vector{Float64}(),
                      guess::AbstractVector{Float64} = fill(0.5,npar),
-                     logfile = NoPrint,
+                     logfile = NoPrint(),
                      C::AbstractArray{Float64} = Matrix{Float64}(undef,0,0));
 
     nobs = length(ydata)
@@ -142,7 +142,7 @@ function fit_routine(model::Function,
                      wpm::AbstractDict = Dict{Int64,Vector{Float64}}(),
                      corr::Bool = true,
                      guess::AbstractArray = fill(0.5,npar),
-                     logfile = NoPrint,
+                     logfile = NoPrint(),
                      C::AbstractArray = Float64[])
     Nx = length(xdata)
     if (Nx != length(ydata))
@@ -215,7 +215,7 @@ function fit_routine(models::AbstractArray{Function},
                      wpm::AbstractDict = Dict{Int64,Vector{Float64}}(),
                      corr::Bool = true,
                      guess::AbstractArray = fill(0.5,npar),
-                     logfile = NoPrint,
+                     logfile = NoPrint(),
                      )
     Nmodel = length(models)
     ndata = length.(xdata)
