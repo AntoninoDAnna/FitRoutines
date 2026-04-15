@@ -1,0 +1,16 @@
+name = "FitRoutines"
+uuid = "50f2c4dc-e05c-49ef-ab96-b19e0c18a1e2"
+authors = ["Antonino DAnna <antonino.danna@estudiante.uam.es>"]
+version = "0.1.0"
+
+[deps]
+ADerrors = "5e92007d-7bf1-471c-8ceb-4591b8b567a9"
+BDIO = "375f315e-f2c4-11e9-2ef9-134f02f79e27"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
+
+[compat]
+ADerrors = "0.1.0"
+BDIO = "0.1.0"
+LinearAlgebra = "1.11.0"
+LsqFit = "0.16.0"
