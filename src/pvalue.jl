@@ -19,7 +19,7 @@ function __Q(nu,chi,nmc)
             z[j] = randn()
             z2[j] = z[j]^2
         end
-        aux = sum(z2[i]*eig[i] for i in in eachindex(eig))
+        aux = sum(z2[i]*eig[i] for i in eachindex(eig))
         if aux < chi
             Q+=1.0
         end
