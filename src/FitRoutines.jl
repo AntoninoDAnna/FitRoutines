@@ -1,6 +1,6 @@
 module FitRoutines
 
-using ADerrors, LsqFit, LinearAlgebra
+using ADerrors, LsqFit, LinearAlgebra, ForwardDiff
 
 
 include("types.jl")
