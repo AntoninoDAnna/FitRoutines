@@ -2,7 +2,7 @@
 
 julia_version = "1.11.2"
 manifest_format = "2.0"
-project_hash = "d40f659f3cf723144d1f15b850c672d0bbff13f5"
+project_hash = "3f63f0538aed850aa4a08da627db432ea46026e3"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -396,6 +396,11 @@ version = "1.17.0"
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.6.0"
+
+[[deps.EnumClasses]]
+git-tree-sha1 = "889148bc638c63a7777b384ec0fad43836af99a5"
+uuid = "53ae640c-c67a-4d53-9dcb-4c921c67b7cd"
+version = "0.1.0"
 
 [[deps.EpollShim_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]

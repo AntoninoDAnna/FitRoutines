@@ -70,6 +70,9 @@ print(::NoPrint,x...) = nothing
 println(::NoPrint,x...) = nothing
 Base.flush(::NoPrint) = nothing
 
+import Printf:format
+format(::NoPrint,f,x...) = nothing
+
 ## auxiliary function for uwreal
 
 compute_error_for_logging(logfile, p) = uwerr.(p)
