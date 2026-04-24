@@ -119,7 +119,7 @@ function fit_routine(model::Function,
     println(logfile, "\t\tchiexp:     ", chiexp)
     println(logfile, "\t\tpvalue:     ", pval)
 
-    return (par=par,chi2=chi2,chiexp=chiexp,pval=pval)
+    return FitRes(par=par,chi2=chi2,chiexp=chiexp,pval=pval)
 end
 
 """
