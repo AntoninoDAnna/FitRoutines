@@ -35,7 +35,7 @@ end
     W::Union{Vector{Float64},Array{Float64,2}} = Vector{Float64}();
     wpm = Dict{Int64,Vector{Float64}}()
     nmc::Int64 = 5000,
-    C::AbstractMatrix{Float64} = GammaMethod.cov_AD(data,wpm))
+    C::AbstractMatrix{Float64} = Matrix{Float64}(undef,0,0))
 
 Computes the p-value of a previously done fit, using as input the `\chi^2` observed from the fit, the fit parameters and the fitted data.
 The p-value for a given `\chi^2` is the probability of, given the data you have, finding such a `\chi^2` or worse from a fit, and still
@@ -67,7 +67,7 @@ function pvalue(chisq::Function,
     W::AbstractVector{Float64}=Vector{Float64}();
     wpm::Union{Dict{Int64,Vector{Float64}},Dict{String,Vector{Float64}}, Nothing} =  Dict{Int64,Vector{Float64}}(),
     nmc::Int64 = 5000,
-    C::AbstractMatrix{Float64} = ADerrors.cov(data,wpm))
+    C::AbstractMatrix{Float64} = Matrix{Float64}(undef,0,0))
 
     n = length(xp)   # Number of fit parameters
     m = length(data) # Number of data
@@ -127,6 +127,8 @@ function pvalue(chisq::Function,
         end
         _Px
     end
+
+    length(C)!=0 || (C=ADerrors.cov_sym(data))
 
     nu = let
         aux = sqrt(C)

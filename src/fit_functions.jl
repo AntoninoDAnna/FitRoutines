@@ -88,7 +88,7 @@ function fit_routine(model::Function,
     [uwerr(y, wpm) for y in ydata]
     if length(W) ==0
         if corr
-            C = length(C) ==0 ? GammaMethod.cov_AD(ydata) : C
+            C = length(C) ==0 ? ADerrors.cov_sym(ydata) : C
             W = LinearAlgebra.pinv(C);
             W = (W'+W)*0.5
         else
@@ -102,11 +102,14 @@ function fit_routine(model::Function,
     chi2 = sum(fit.resid.^2)
     par = fit_error(chisq,LsqFit.coef(fit),ydata,wpm,W,false)
     # if the fit is correlated  we have already C, no need to recompute it.
-    chiexp,pval =  if length(C) !=0
-        GammaMethod.chiexp(chisq,LsqFit.coef(fit),value.(ydata),C,W),pvalue(chisq,chi2,LsqFit.coef(fit),ydata,W,C=C)
-    else
-        ADerrors.chiexp(chisq,LsqFit.coef(fit),ydata,wpm,W=W),pvalue(chisq,chi2,LsqFit.coef(fit),ydata,W,wpm=wpm)
-    end
+    chiexp  = ADerrors.chiexp(chisq,
+                              LsqFit.coef(fit),
+                              ydata,
+                              wpm,
+                              C=length(C)==0 ? nothing : C,
+                              W=W)
+
+    pval = pvalue(chisq,chi2,LsqFit.coef(fit),ydata,W,wpm=wpm,C=C)
 
     compute_error_for_logging(logfile,par);
     println(logfile, "fit_routine output:")
