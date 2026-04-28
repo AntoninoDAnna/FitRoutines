@@ -1,58 +1,99 @@
 using EnumClasses, Printf
-@enumclass Update tmin tmax
 
-mutable struct Ranges
-    tmin::Int64
-    tmax::Int64
-    is::Int64
-    ie::Int64
-    step::Int64
-    update::Update.Type
-    Ranges(tmin,tmax,update) =  new(tmin,tmax,tmin,tmax,1,update)
-    Ranges(tmin,tmax,step,update) =  new(tmin,tmax,tmin,tmax,step,update)
+abstract type AbstractUpdate end
+struct TMIN <:AbstractUpdate end
+struct TMAX <:AbstractUpdate end
+struct TMAX_SPAN <:AbstractUpdate end
+struct TMIN_SPAN <:AbstractUpdate end
+
+@enumclass Update tmin tmax tmax_span tmin_span
+
+mutable struct Ranges{T<:AbstractUpdate}
+    tmin
+    tmax
+    is
+    ie
+    step
+    function Ranges(tmin,tmax,step,update::Update.Type)
+        update == Update.tmin && return new{TMIN}(tmin,tmax,tmin,tmax,step)
+        update == Update.tmax && return new{TMAX}(tmin,tmax,tmin,tmax,step)
+        if update == Update.tmax_span
+            length(tmax) >1 || error("Expected more than one tmax")
+            return new{TMAX_SPAN}(tmin,tmax,tmin,tmax[1],step)
+        end
+        if update == Update.tmin_span
+            length(tmin)>1 || error("Expected more than one tmin")
+            return new{TMIN_SPAN}(tmin,tmax,tmin[1],tmax,step)
+        end
+    end
+    Ranges(tmin,tmax,update::Update.Type) =  Ranges(tmin,tmax,1,update)
 end
 
-function Base.iterate(r::Ranges)
-    r.is=r.tmin
-    r.ie=r.tmax
+function Base.iterate(r::Ranges{T}) where T<:AbstractUpdate
+    r.is=r.tmin[1]
+    r.ie=r.tmax[1]
     return range(r.is, r.ie, step=r.step), 1
 end
 
-function Base.iterate(r::Ranges,state)
+function Base.iterate(r::Ranges{TMIN},state)
     if r.ie-r.is == 1
-        if r.update == Update.tmin
-            r.ie -=1
-            r.ie == r.tmin && return nothing
-            r.is = r.tmin
-        elseif r.update==Update.tmax
-            r.is +=1
-            r.is == r.tmax && return nothing
-            r.ie = r.tmax
-        end
+        r.ie -=1
+        r.ie == r.tmin && return nothing
+        r.is = r.tmin
         return range(r.is,r.ie,step = r.step), state+1
     end
-    if r.update == Update.tmin
-        r.is +=1
-    elseif r.update==Update.tmax
-        r.ie -=1
-    end
+    r.is +=1
     return range(r.is,r.ie,step=r.step), state+1
 end
 
-function Base.IteratorSize(r::Ranges)
-    if r.update in (Update.tmin, Update.tmax)
-        return Base.HasLength()
+function Base.iterate(r::Ranges{TMAX},state)
+    if r.ie-r.is == 1
+        r.is +=1
+        r.is == r.tmax && return nothing
+        r.ie = r.tmax
+        return range(r.is,r.ie,step = r.step), state+1
     end
-    return Base.SizeUnknown()
+    r.ie -=1
+    return range(r.is,r.ie,step=r.step), state+1
 end
 
-function Base.length(r::Ranges)
-    if r.update in (Update.tmin, Update.tmax)
-        L = r.tmax-r.tmin+1
-        return div(L*(L-1),2)
+function Base.iterate(r::Ranges{TMAX_SPAN},state)
+    if r.ie-r.is ==1
+        i = findlast(r.ie.== r.tmax)
+        i == lastindex(r.tmax) && return nothing
+        r.is = r.tmin
+        r.ie = r.tmax[i+1]
+        return range(r.is,r.ie,step=r.step),state+1
     end
-    return Base.SizeUnknown()
+    r.is +=1
+    return range(r.is,r.ie,step=r.step),state+1
 end
+
+function Base.iterate(r::Ranges{TMIN_SPAN},state)
+    if r.ie-r.is ==1
+        i = findlast(r.is.== r.tmin)
+        i == lastindex(r.tmin) && return nothing
+        r.is = r.tmin[i+1]
+        r.ie = r.tmax
+        return range(r.is,r.ie,step=r.step),state+1
+    end
+    r.ie -=1
+    return range(r.is,r.ie,step=r.step),state+1
+end
+
+
+Base.IteratorSize(::Ranges{T}) where T <:AbstractUpdate = Base.SizeUnknown()
+Base.IteratorSize(::Ranges{TMIN})  = Base.HasLength()
+Base.IteratorSize(::Ranges{TMAX})  = Base.HasLength()
+Base.IteratorSize(::Ranges{TMAX_SPAN}) = Base.HasLength()
+
+function Base.length(r::Ranges{T}) where T<: Union{TMIN,TMAX}
+    L = r.tmax-r.tmin+1
+    return div(L*(L-1),2)
+end
+
+Base.length(r::Ranges{TMAX_SPAN}) =  sum(t-r.tmin for t in r.tmax)
+Base.length(r::Ranges{TMIN_SPAN}) =  sum(r.tmax-t for t in r.tmin)
 
 function fit_scan(model,xdata,ydata,npar;
                   tmin = 1, tmax = lastindex(xdata),
