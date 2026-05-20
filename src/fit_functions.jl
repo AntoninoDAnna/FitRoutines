@@ -73,7 +73,7 @@ function fit_routine(model::Function,
                      xdata::AbstractArray{<:Real},
                      ydata::AbstractArray{uwreal},
                      npar::Int64;
-                     wpm::Union{Dict{Int64,Vector{Float64}},Dict{String,Vector{Float64}}}=Dict{Int64,Vector{Float64}}(),
+                     wpm::Union{Dict{Int64,Vector{Float64}}, Dict{String,Vector{Float64}}} = Dict{Int64,Vector{Float64}}(),
                      corr::Bool = true,
                      W::AbstractArray{Float64}=Vector{Float64}(),
                      guess::AbstractVector{Float64} = fill(0.5,npar),

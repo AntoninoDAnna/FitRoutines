@@ -128,7 +128,7 @@ function pvalue(chisq::Function,
         _Px
     end
 
-    length(C)!=0 || (C=ADerrors.cov_sym(data))
+    length(C)!=0 || (C=ADerrors.cov_sym(data,wpm))
 
     nu = let
         aux = sqrt(C)
