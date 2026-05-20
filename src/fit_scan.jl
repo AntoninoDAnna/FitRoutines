@@ -14,9 +14,7 @@ function fit_scan(model,xdata,ydata,npar;
                   corr = false)
 
     println(logfile,"Starting Fit Scan")
-    Printf.@printf logfile "Scanning region [%.12e, %.12e]\n" xdata[1] xdata[end]
-
-    vdata = Vector{NamedTuple}()  ## vector of fit results
+    Printf.@printf logfile "Scanning region [%.12e, %.12e]\n" xdata[tmin[1]] xdata[tmax[1]]
     ranges = Ranges(tmin,tmax)
     println(logfile, ranges)
     flush(logfile)
