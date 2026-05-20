@@ -77,3 +77,99 @@ format(::NoPrint,f,x...) = nothing
 
 compute_error_for_logging(logfile, p) = uwerr.(p)
 compute_error_for_logging(logfile::NoPrint,p) = nothing
+
+
+## Ranges
+using Printf
+
+abstract type AbstractUpdate end
+struct ALL <:AbstractUpdate end
+struct TMAX_SPAN <:AbstractUpdate end
+struct TMIN_SPAN <:AbstractUpdate end
+struct TMINMAX_SPAN <:AbstractUpdate end
+
+mutable struct Ranges{T<:AbstractUpdate}
+    tmin
+    tmax
+    is
+    ie
+    step
+    Ranges(tmin, tmax, step=1) = Ranges(tmin,tmax,step,eltype(tmin),eltype(tmax))
+    Ranges(tmin::T,tmax::U,step,::Type{T},::Type{U}) where {T<:Number,U<:Number} = new{ALL}(tmin,tmax,tmin,tmax,step)
+    Ranges(tmin::T,tmax::U,step,::Type{S},::Type{V}) where {T,U,S<:Number,V<:Number} = new{TMINMAX_SPAN}(tmin,tmax,tmin[1],tmax[1],step)
+    Ranges(tmin::T,tmax::U,step,::Type{T},::Type{V}) where {T<:Number,U,V<:Number}  = new{TMAX_SPAN}(tmin,tmax,tmin,tmax[1],step)
+    Ranges(tmin::T,tmax::U,step,::Type{V},::Type{U}) where {T, U<:Number,V<:Number} = new{TMIN_SPAN}(tmin,tmax,tmin[1],tmax,step)
+end
+
+function Base.iterate(r::Ranges{T}) where T<:AbstractUpdate
+    r.is=r.tmin[1]
+    r.ie=r.tmax[1]
+    return range(r.is, r.ie, step=r.step), 1
+end
+
+function Base.iterate(r::Ranges{ALL},state)
+    if r.ie-r.is <= 1
+        r.ie -=1
+        r.ie == r.tmin && return nothing
+        r.is = r.tmin
+        return range(r.is,r.ie,step = r.step), state+1
+    end
+    r.is +=1
+    return range(r.is,r.ie,step=r.step), state+1
+end
+
+function Base.iterate(r::Ranges{TMAX_SPAN},state)
+    if r.ie-r.is <=1
+        i = findlast(r.ie.== r.tmax)
+        i == lastindex(r.tmax) && return nothing
+        r.is = r.tmin
+        r.ie = r.tmax[i+1]
+        return range(r.is,r.ie,step=r.step),state+1
+    end
+    r.is +=1
+    return range(r.is,r.ie,step=r.step),state+1
+end
+
+function Base.iterate(r::Ranges{TMIN_SPAN},state)
+    if r.ie-r.is <=1
+        i = findlast(r.is.== r.tmin)
+        i == lastindex(r.tmin) && return nothing
+        r.is = r.tmin[i+1]
+        r.ie = r.tmax
+        return range(r.is,r.ie,step=r.step),state+1
+    end
+    r.ie -=1
+    return range(r.is,r.ie,step=r.step),state+1
+end
+
+function Base.iterate(r::Ranges{TMINMAX_SPAN},state)
+    if r.is == r.tmin[end]
+        r.ie == r.tmax[end] && return nothing
+        i= findlast(r.ie==t for t in r.tmax)
+        r.ie=r.tmax[i+1]
+        r.is=r.tmin[1]
+    else
+        i= findlast(r.is==t for t in r.tmin)
+        r.is = r.tmin[i+1]
+    end
+    return range(r.is,r.ie,step=r.step), state
+end
+
+Base.IteratorSize(::Ranges{T}) where T <:AbstractUpdate = Base.HasSize()
+
+function Base.length(r::Ranges{ALL})
+    L = r.tmax-r.tmin+1
+    div(L*(L-1),2)
+end
+
+Base.length(r::Ranges{TMIN_SPAN}) = sum(r.tmax<=t ? 0 : r.tmax-t for t in r.tmin)
+Base.length(r::Ranges{TMAX_SPAN}) = sum(t<=r.tmin ? 0 : t-r.tmin for t in r.tmax)
+Base.length(r::Ranges{TMINMAX_SPAN}) = sum(T<=t ? 0 : T-t for T in r.tmax, t in r.tmin )
+
+Base.print(io::IO,r::Ranges{TMIN_SPAN}) = @printf io "Tmin span in [%d,%d], tmax start in %d" r.tmin[1] r.tmin[end] r.tmax
+
+Base.print(io::IO,r::Ranges{TMAX_SPAN}) = @printf io "Tmax span in [%d,%d], tmin starts in %d" r.tmax[1] r.tmax[end] r.tmin
+
+Base.print(io::IO,r::Ranges{TMINMAX_SPAN}) = @printf io "Tmin span in [%d,%d], tmax span in [%d,%d]" r.tmin[1] r.tmin[end] r.tmax[1] r.tmax[end]
+
+Base.print(io::IO,r::Ranges{ALL}) = @printf io "All fit in [%d,%d]" r.tmin r.tmax
