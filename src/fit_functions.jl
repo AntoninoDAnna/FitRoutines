@@ -9,11 +9,13 @@ If `W::AbstractMatrix` the chi square is computed for a correlated fit
 It assumes that `x`, `data` and `W` have compatible dimensions.
 """
 function get_chi(model,x,par,data,W::AbstractMatrix)
-    return sum((data[i]-model(x[i],par)) * W[i,j] * (data[j]-model(x[j],par)) for i in axes(W,1), j in axes(W,2))
+    ytrue = model(x,par)
+    return sum((data[i]-ytrue[i]) * W[i,j] * (data[j]-model(x[j],par)) for i in axes(W,1), j in axes(W,2))
 end
 
 function get_chi(model,x,par,data,W::AbstractVector)
-    return sum((data[i]-model(x[i],par))^2 * W[i] for i in eachindex(W))
+    ytrue = model(x,par)
+    return sum((data[i]-ytrue[i])^2 * W[i] for i in eachindex(W))
 end
 
 @doc raw"""
@@ -149,15 +151,15 @@ function fit_routine(model::Function,
                      C::AbstractArray = Float64[])
     Nx = length(xdata)
     if (Nx != length(ydata))
-        error("[juobs] Error: xdata and ydata must have the same dimension")
+        error("[FitRoutines] Error: xdata and ydata must have the same dimension")
     end
     Ndata = 2Nx; ## in total we have 2*lengt(xdata) data points
     data = vcat(ydata,xdata)
     if !check_sizes(W,Ndata)
-        error("[juobs] Error: W does not have the correct sizes")
+        error("[FitRoutines] Error: W does not have the correct sizes")
     end
     if !check_sizes(C,Ndata)
-        error("[juobs] Error: C does not have the correct sizes")
+        error("[FitRoutines] Error: C does not have the correct sizes")
     end
 
     if corr
@@ -172,9 +174,9 @@ function fit_routine(model::Function,
     new_guess = [guess; value.(xdata)]
     fit = fit_routine(fit_func,zeros(Ndata),data,npar+Nx,
                       guess=new_guess, wpm=wpm,corr=corr,
-                      W=W,C=C,logfile=nothing)
+                      W=W,C=C,logfile=NoPrint())
 
-    compute_error_for_logging(logfile,par);
+    compute_error_for_logging(logfile,fit.par);
     println(logfile, "fit_routine output:")
     println(logfile, "\t\txdata carries uncertainty")
     println(logfile, "\t\tFit routine in [$(xdata[1].mean),...,$(xdata[end].mean)]")
@@ -214,7 +216,7 @@ function fit_routine(models::AbstractArray{Function},
                      ydata::AbstractArray{<:AbstractArray{ADerrors.uwreal}},
                      npar::Int64;
                      W = Float64[],
-                     C = Float64[],
+                     C = Matrix{Float64}(undef,0,0),
                      wpm::AbstractDict = Dict{Int64,Vector{Float64}}(),
                      corr::Bool = true,
                      guess::AbstractArray = fill(0.5,npar),
@@ -224,16 +226,16 @@ function fit_routine(models::AbstractArray{Function},
     ndata = length.(xdata)
     Ntotal = sum(ndata);
     if Nmodel != length(xdata) != length(ydata)
-        error("[juobs] Error: you need the same number of model, xdata and ydata")
+        error("[FitRoutines] Error: you need the same number of model, xdata and ydata")
     end
     if !(length(W) == 0 || length(W)==Nmodel || length(W) == Ntotal^2)
-        error("[juobs] Error: You need to pass a W matrix for model, for all the data or none")
+        error("[FitRoutines] Error: You need to pass a W matrix for model, for all the data or none")
     end
     if !(length(C) == 0 || length(C)==Nmodel || length(C) == Ntotal^2)
-        error("[juobs] Error: You need to pass a C matrix for model, for all the data or none")
+        error("[FitRoutines] Error: You need to pass a C matrix for model, for all the data or none")
     end
     if !all(length.(ydata).== ndata)
-        error("[juobs] Error: Mismatch in xdata and ydata. Make sure that the data corresponds")
+        error("[FitRoutines] Error: Mismatch in xdata and ydata. Make sure that the data corresponds")
     end
     X = vcat(xdata...)
     Y = vcat(ydata...)
@@ -253,7 +255,7 @@ function fit_routine(models::AbstractArray{Function},
     WW = length(W)==0 ? W : make_matrix(W);
     CC = length(C)==0 ? C : make_matrix(C);
 
-    function Model(x,p)
+    function Model(x::Vector,p::AbstractVector;models =models, Nmodel::Int64=Nmodel,ndata::Vector{Int64}=ndata)
         res = Vector{Any}(undef,Nmodel)
         res[1] = models[1](x[1:ndata[1]],p)
         is= 1
@@ -267,10 +269,10 @@ function fit_routine(models::AbstractArray{Function},
         return vcat(res...)
     end
 
-    fit = fit_routine(Model,X,Y,npar,guess = guess,W=WW,C=CC,corr=corr,logfile=nothing,wpm=wpm)
+    fit = fit_routine(Model,X,Y,npar,guess = guess,W=WW,C=CC,corr=corr,logfile=NoPrint(),wpm=wpm)
 
 
-    compute_error_for_logging(logfile,par)
+    compute_error_for_logging(logfile, fit.par)
     flag = typeof(xdata) <: AbstractArray{<:AbstractArray{ADerrors.uwreal}}
     println(logfile, "fit_routine output:")
     if flag
