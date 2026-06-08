@@ -31,6 +31,12 @@ function Base.iterate(f::FitRes{Nothing}, state=1)
     return nothing
 end
 
+import Base.getproperty
+
+function Base.getproperty(v::FitRes{<:NamedTuple{names,types}}, name::Symbol) where {names, types}
+    (name in names) && return getfield(v.extra, name)
+    getfield(v,name)
+end
 
 import Base: print
 function __print_minimum_fit__(io::IO,f::FitRes{NT}) where NT <:Union{Nothing,NamedTuple}
@@ -58,6 +64,7 @@ function print(io::IO,f::FitRes{NT}) where NT<:NamedTuple
     end
     nothing
 end
+
 """
         struct NoPrint
 
