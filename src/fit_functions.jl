@@ -196,7 +196,7 @@ function fit_routine(model::Function,
 end
 
 @doc raw"""
-        fit_routine(model::AbstractArray{Function},
+        fit_routine(model::AbstractArray{<:Function},
                     xdata::AbstractArray{<:AbstractArray},
                     ydata::AbstractArray{<:AbstractArray{ADerrors.uwreal}},npar; kwargs...)
 
@@ -211,7 +211,7 @@ It returns a `NamedTuple` with names:
   - `:chiexp`: chisquare expected
   - `:pval`:   pvalue
 """
-function fit_routine(models::AbstractArray{Function},
+function fit_routine(models::AbstractArray{<:Function},
                      xdata::AbstractArray{<:AbstractArray},
                      ydata::AbstractArray{<:AbstractArray{ADerrors.uwreal}},
                      npar::Int64;
