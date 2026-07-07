@@ -10,7 +10,7 @@ It assumes that `x`, `data` and `W` have compatible dimensions.
 """
 function get_chi(model,x,par,data,W::AbstractMatrix)
     ytrue = model(x,par)
-    return sum((data[i]-ytrue[i]) * W[i,j] * (data[j]-model(x[j],par)) for i in axes(W,1), j in axes(W,2))
+    return sum((data[i]-ytrue[i]) * W[i,j] * (data[j]-ytrue[j]) for i in axes(W,1), j in axes(W,2))
 end
 
 function get_chi(model,x,par,data,W::AbstractVector)
@@ -84,7 +84,7 @@ function fit_routine(model::Function,
 
     nobs = length(ydata)
     if length(xdata)!=nobs
-        error("xdata and ydata must be the of same size")
+        error("xdata and ydata must be of the same size")
     end
 
     [uwerr(y, wpm) for y in ydata]
@@ -270,8 +270,6 @@ function fit_routine(models::AbstractArray{<:Function},
     end
 
     fit = fit_routine(Model,X,Y,npar,guess = guess,W=WW,C=CC,corr=corr,logfile=NoPrint(),wpm=wpm)
-
-
     compute_error_for_logging(logfile, fit.par)
     flag = typeof(xdata) <: AbstractArray{<:AbstractArray{ADerrors.uwreal}}
     println(logfile, "fit_routine output:")
