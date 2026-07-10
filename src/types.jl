@@ -111,7 +111,9 @@ end
 function Base.iterate(r::Ranges{T}) where T<:AbstractUpdate
     r.is=r.tmin[1]
     r.ie=r.tmax[1]
-    return range(r.is, r.ie, step=r.step), 1
+        _r = range(r.is,r.ie,step=r.step)
+    isempty(_r) || return _r,1
+    return Base.iterate(r,1)
 end
 
 function Base.iterate(r::Ranges{ALL},state)
@@ -122,7 +124,9 @@ function Base.iterate(r::Ranges{ALL},state)
         return range(r.is,r.ie,step = r.step), state+1
     end
     r.is +=1
-    return range(r.is,r.ie,step=r.step), state+1
+    _r = range(r.is,r.ie,step=r.step)
+    isempty(_r) || return _r,state+1
+    return Base.iterate(r,state+1)
 end
 
 function Base.iterate(r::Ranges{TMAX_SPAN},state)
@@ -134,7 +138,9 @@ function Base.iterate(r::Ranges{TMAX_SPAN},state)
         return range(r.is,r.ie,step=r.step),state+1
     end
     r.is +=1
-    return range(r.is,r.ie,step=r.step),state+1
+    _r = range(r.is,r.ie,step=r.step)
+    isempty(_r) || return _r,state+1
+    return Base.iterate(r,state+1)
 end
 
 function Base.iterate(r::Ranges{TMIN_SPAN},state)
@@ -146,10 +152,12 @@ function Base.iterate(r::Ranges{TMIN_SPAN},state)
         return range(r.is,r.ie,step=r.step),state+1
     end
     r.ie -=1
-    return range(r.is,r.ie,step=r.step),state+1
+    _r = range(r.is,r.ie,step=r.step)
+    isempty(_r) || return _r,state+1
+    return Base.iterate(r,state+1)
 end
 
-function Base.iterate(r::Ranges{TMINMAX_SPAN},state)
+function Base.iterate(r::FR.Ranges{FR.TMINMAX_SPAN},state)
     if r.is == r.tmin[end]
         r.ie == r.tmax[end] && return nothing
         i= findlast(r.ie==t for t in r.tmax)
@@ -159,19 +167,21 @@ function Base.iterate(r::Ranges{TMINMAX_SPAN},state)
         i= findlast(r.is==t for t in r.tmin)
         r.is = r.tmin[i+1]
     end
-    return range(r.is,r.ie,step=r.step), state
+    _r = range(r.is,r.ie,step=r.step)
+    isempty(_r) || return _r,state+1
+    return Base.iterate(r,state+1)
 end
 
-Base.IteratorSize(::Ranges{T}) where T <:AbstractUpdate = Base.HasSize()
+Base.IteratorSize(::Ranges{T}) where T <:AbstractUpdate = Base.HasLength()
 
 function Base.length(r::Ranges{ALL})
     L = r.tmax-r.tmin+1
     div(L*(L-1),2)
 end
 
-Base.length(r::Ranges{TMIN_SPAN}) = sum(r.tmax<=t ? 0 : r.tmax-t for t in r.tmin)
+Base.length(r::FR.Ranges{FR.TMIN_SPAN}) = sum(r.tmax<=t ? 0 : r.tmax-t for t in r.tmin)
 Base.length(r::Ranges{TMAX_SPAN}) = sum(t<=r.tmin ? 0 : t-r.tmin for t in r.tmax)
-Base.length(r::Ranges{TMINMAX_SPAN}) = sum(T<=t ? 0 : T-t for T in r.tmax, t in r.tmin )
+Base.length(r::FR.Ranges{FR.TMINMAX_SPAN}) = sum(t<=T  for T in r.tmax, t in r.tmin )
 
 Base.print(io::IO,r::Ranges{TMIN_SPAN}) = @printf io "Tmin span in [%d,%d], tmax start in %d" r.tmin[1] r.tmin[end] r.tmax
 
