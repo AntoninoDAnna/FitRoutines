@@ -7,7 +7,7 @@ It exectutes all the fit compatible with `tmin`, `tmax`. Return a  `Vector{FitRe
 function fit_scan(model,xdata,ydata,npar;
                   tmin = 1, tmax = lastindex(xdata),
                   W = Float64[],
-                  logfile = FitRoutines.NoPrint(),
+                  logfile = NoPrint(),
                   wpm   = Dict{Int64,Vector{Float64}}(),
                   C     = Matrix{Float64}(undef, 0,0),
                   guess = fill(0.5, npar),

@@ -19,8 +19,8 @@ function Base.iterate(f::FitRes{NT}, state=1) where NT<:NamedTuple
     state == 3 && (return (:chi2 => f.chi2),state+1)
     state == 4 && (return (:chiexp => f.chiexp),state+1)
     idx = state-4
-    idx > length(A) && return nothing
-    return (keys(fit.extra)[i] => fit.extra[i]),state+1
+    idx > length(f.extra) && return nothing
+    return (keys(f.extra)[idx] => f.extra[idx]),state+1
 end
 
 function Base.iterate(f::FitRes{Nothing}, state=1)
@@ -53,9 +53,34 @@ function __print_minimum_fit__(io::IO,f::FitRes{NT}) where NT <:Union{Nothing,Na
     print(io,"\tchi^2/chi_exp  = ",f.chi2/f.chiexp)
 end
 
-print(io::IO, f::FitRes{Nothing}) = __print_minimum_fit__(io,f)
+function __get_fit_filter(;k...)
+    function filter(f::FitRes)
+        for (_key, val) in k
+            hasfield(typeof(f),_key) || haskey(f.extra,_key) || return false
+            getproperty(f,_key) == val || return false
+        end
+        return true
+    end
+    return filter
+end
 
-function print(io::IO,f::FitRes{NT}) where NT<:NamedTuple
+function findfirst_fit_from_scan(scan::Vector{FitRes};k...)
+    F =  __get_fit_filter(;k...)
+    idx = findfirst(F,scan)
+    isnothing(idx) || return scan[idx]
+    error("[findfirst_fit_from_scan]: fit not found")
+end
+
+function findall_fit_from_scan(scan::Vector{FitRes};k...)
+    F =  __get_fit_filter(;k...)
+    aux =  findall(F,scan)
+    return scan[aux]
+end
+
+
+Base.print(io::IO, f::FitRes{Nothing}) = __print_minimum_fit__(io,f)
+
+function Base.print(io::IO,f::FitRes{NT}) where NT<:NamedTuple
     __print_minimum_fit__(io,f)
     ismissing(f.par) && return
     for k in keys(f.extra)
@@ -64,6 +89,8 @@ function print(io::IO,f::FitRes{NT}) where NT<:NamedTuple
     end
     nothing
 end
+
+
 
 """
         struct NoPrint
