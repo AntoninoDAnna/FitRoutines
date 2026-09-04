@@ -32,15 +32,14 @@ end
     chi2::Float64,
     xp::AbstractVector{Float64},
     data::AbstractVector{uwreal},
-    W::Union{Vector{Float64},Array{Float64,2}} = Vector{Float64}();
-    wpm = Dict{Int64,Vector{Float64}}()
+    W::Union{AbstractVecOrMat}{Float64}=Vector{Float64}();
+    wpm::Union{Dict{Int64,Vector{Float64}},Dict{String,Vector{Float64}}, Nothing} =  Dict{Int64,Vector{Float64}}(),
     nmc::Int64 = 5000,
     C::AbstractMatrix{Float64} = Matrix{Float64}(undef,0,0))
 
 Computes the p-value of a previously done fit, using as input the `\chi^2` observed from the fit, the fit parameters and the fitted data.
 The p-value for a given `\chi^2` is the probability of, given the data you have, finding such a `\chi^2` or worse from a fit, and still
 have the data well described by the fit function. `nmc` is the number of MC samples used to estimate the p-value integral, default is 5000.
-By now it only works with a vector for weights (containing the diagonal of W)
 
 ```@example
 function fit_defs(f::Function,x,W)
@@ -55,10 +54,13 @@ fit = curve_fit(fun, x, value.(y), 1.0 ./ err.(y) .^ 2, [0.5, 0.5])
 
 wpm = Dict{Int64,Vector{Float64}}()
 wpm[1] = [-1.0,-1.0,4-0,-1.0]
-Q = pvalue(chisq, chi2, value.(up), y, wpm; W = 1.0 ./ err.(y) .^ 2, nmc=10000)
-#Q = pvalue(chisq, chi2, value.(up), y; W = 1.0 ./ err.(y) .^ 2, nmc=10000)
+Q = pvalue(chisq, chi2, value.(up), y, 1.0 ./ err.(y) .^ 2, wmp = wpm, nmc=10000)
+#Q = pvalue(chisq, chi2, value.(up), y, 1.0 ./ err.(y) .^ 2, nmc=10000)
 #Q = pvalue(chisq, chi2, value.(up), y)
 ```
+
+## Reference
+Mattia Bruno, Rainer Sommer, Comput.Phys.Commun. 285 (2023), 108643, arxiv: 2209.14188
 """
 function pvalue(chisq::Function,
     chi2::Float64,
@@ -150,7 +152,7 @@ function pvalue(chisq::Function,
     W::AbstractArray{Float64,2};
     wpm::Union{Dict{Int64,Vector{Float64}},Dict{String,Vector{Float64}}, Nothing} =  Dict{Int64,Vector{Float64}}(),
     nmc::Int64 = 5000,
-    C::AbstractMatrix{Float64} = GammaMethod.cov_AD(data,wpm))
+    C::AbstractMatrix{Float64} = Matrix{Float64}(undef,0,0))
 
     n = length(xp)   # Number of fit parameters
     m = length(data) # Number of data
@@ -200,6 +202,8 @@ function pvalue(chisq::Function,
         end
         _Px
     end
+
+    length(C)!=0 || (C=ADerrors.cov_sym(data,wpm))
 
     nu = let
         aux=sqrt(C)
