@@ -103,7 +103,7 @@ import Base.print, Base.println, Base.flush
 print(::NoPrint,x...) = nothing
 println(::NoPrint,x...) = nothing
 Base.flush(::NoPrint) = nothing
-
+Base.showerror(::NoPrint,e) = nothing
 import Printf:format
 format(::NoPrint,f,x...) = nothing
 
@@ -121,7 +121,8 @@ struct ALL <:AbstractUpdate end
 struct TMAX_SPAN <:AbstractUpdate end
 struct TMIN_SPAN <:AbstractUpdate end
 struct TMINMAX_SPAN <:AbstractUpdate end
-
+struct TMIN_TIED <: AbstractUpdate end
+struct TMAX_TIED <: AbstractUpdate end
 mutable struct Ranges{T<:AbstractUpdate}
     tmin
     tmax
@@ -133,12 +134,14 @@ mutable struct Ranges{T<:AbstractUpdate}
     Ranges(tmin::T,tmax::U,step,::Type{S},::Type{V}) where {T,U,S<:Number,V<:Number} = new{TMINMAX_SPAN}(tmin,tmax,tmin[1],tmax[1],step)
     Ranges(tmin::T,tmax::U,step,::Type{T},::Type{V}) where {T<:Number,U,V<:Number}  = new{TMAX_SPAN}(tmin,tmax,tmin,tmax[1],step)
     Ranges(tmin::T,tmax::U,step,::Type{V},::Type{U}) where {T, U<:Number,V<:Number} = new{TMIN_SPAN}(tmin,tmax,tmin[1],tmax,step)
+    Ranges(tmin::Function,tmax::T,step,::Type{Any},::Type{U}) where {T,U<:Number} = new{TMIN_TIED}(tmin,tmax,tmin(tmax[1]),tmax[1],step)
+    Ranges(tmin::T,tmax::Function,step,::Type{U},::Type{Any}) where {T,U<:Number} = new{TMAX_TIED}(tmin,tmax,tmin[1],tmax(tmin[1]),step)
 end
 
 function Base.iterate(r::Ranges{T}) where T<:AbstractUpdate
     r.is=r.tmin[1]
     r.ie=r.tmax[1]
-        _r = range(r.is,r.ie,step=r.step)
+    _r = range(r.is,r.ie,step=r.step)
     isempty(_r) || return _r,1
     return Base.iterate(r,1)
 end
@@ -199,6 +202,24 @@ function Base.iterate(r::Ranges{TMINMAX_SPAN},state)
     return Base.iterate(r,state+1)
 end
 
+function Base.iterate(r::Ranges{TMAX_TIED},state = 1)
+    if r.is == r.tmin[end]
+        return nothing
+    end
+    r.is = r.tmin[state]
+    r.ie = r.tmax(r.is)
+    return range(r.is,r.ie,step=r.step), state +1
+end
+
+function Base.iterate(r::Ranges{TMIN_TIED},state = 1)
+    if r.ie == r.tmax[end]
+        return nothing
+    end
+    r.ie = r.tmax[state]
+    r.is = r.tmin(r.ie)
+    return range(r.is,r.ie,step=r.step), state +1
+end
+
 Base.IteratorSize(::Ranges{T}) where T <:AbstractUpdate = Base.HasLength()
 
 function Base.length(r::Ranges{ALL})
@@ -209,6 +230,8 @@ end
 Base.length(r::Ranges{TMIN_SPAN}) = sum(r.tmax<=t ? 0 : r.tmax-t for t in r.tmin)
 Base.length(r::Ranges{TMAX_SPAN}) = sum(t<=r.tmin ? 0 : t-r.tmin for t in r.tmax)
 Base.length(r::Ranges{TMINMAX_SPAN}) = sum(t<=T  for T in r.tmax, t in r.tmin )
+Base.length(r::Ranges{TMAX_TIED}) = length(r.tmin)
+Base.length(r::Ranges{TMIN_TIED}) = length(r.tmax)
 
 Base.print(io::IO,r::Ranges{TMIN_SPAN}) = @printf io "Tmin span in [%d,%d], tmax start in %d" r.tmin[1] r.tmin[end] r.tmax
 

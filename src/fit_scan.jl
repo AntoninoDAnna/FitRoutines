@@ -32,7 +32,7 @@ function fit_scan(model,xdata,ydata,npar;
             @error "Error in fit range [%.5e,%.5e]\n" xdata[r[1]] xdata[r[end]]
             continue;
         end
-        fits[idx] = FitRes(;fit...,range = (xdata[r[1]],xdata[r[end]]))
+        fits[idx] = FitRes(;fit...,x_range = [xdata[r[1]],xdata[r[end]]], idx_range = r[[1,end]])
     end
     flush(logfile)
     return collect(skipmissing(fits))
