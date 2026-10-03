@@ -1,7 +1,7 @@
 name = "FitRoutines"
 uuid = "50f2c4dc-e05c-49ef-ab96-b19e0c18a1e2"
-authors = ["Antonino DAnna <antonino.danna@estudiante.uam.es>"]
 version = "0.1.0"
+authors = ["Antonino DAnna <antonino.danna@estudiante.uam.es>"]
 
 [deps]
 ADerrors = "5e92007d-7bf1-471c-8ceb-4591b8b567a9"
@@ -13,7 +13,7 @@ LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [compat]
-ADerrors = "0.1.0"
+ADerrors = "0.1.0 - 1"
 BDIO = "0.1.0"
 EnumClasses = "0.1.0"
 ForwardDiff = "1.3.3"
