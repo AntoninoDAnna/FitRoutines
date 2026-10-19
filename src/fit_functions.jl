@@ -18,6 +18,50 @@ function get_chi(model,x,par,data,W::AbstractVector)
     return sum((data[i]-ytrue[i])^2 * W[i] for i in eachindex(W))
 end
 
+"""
+    pivoted_chol_inverse(C::AbstractMatrix{Float64}, Ctol::Float64, n::Int64)
+
+Invert `C` using a row-maximum pivoted Cholesky factorization (C[p,p] ≈ U'U)
+with tolerance `Ctol`.
+
+- rank(F) < n            → error
+- n ≤ rank(F) < size(C)  → pseudo-inverse of the rank-r approximation
+- rank(F) == size(C)     → ordinary inverse
+"""
+function pivoted_chol_inverse(C::AbstractMatrix{Float64}, Ctol::Float64, n::Int64)
+    N = LinearAlgebra.checksquare(C)
+
+    F = cholesky(Symmetric(C), RowMaximum(); tol = Ctol, check = false)
+    r = F.rank
+
+    r < n && error("Numerical rank $r of C is below the required minimum $n (tol = $Ctol).")
+
+    if r == N
+        # Full rank: inv(C[p,p]) = U⁻¹ U⁻ᵀ
+        Ui = inv(UpperTriangular(F.U))
+        X  = Ui * Ui'
+    else
+        # Rank deficient: C[p,p] ≈ Uᵣ'Uᵣ, with Uᵣ = U[1:r, :] (r × N, full row rank)
+        # pinv(Uᵣ'Uᵣ) = Uᵣ' (Uᵣ Uᵣ')⁻² Uᵣ = W'W,  W = (Uᵣ Uᵣ')⁻¹ Uᵣ
+        Ur = F.U[1:r, :]
+        G  = cholesky(Symmetric(Ur * Ur'))
+        W  = G \ Ur
+        X  = W' * W
+    end
+
+    # Undo the pivoting: result = X[ip, ip]
+    ip = invperm(F.p)
+    return Symmetric(X[ip, ip])
+end
+
+__compute_W(ydata, corr, C) = corr ? hermitianpart(inv(C)).data : [1/y.err^2 for y in ydata]
+
+function __get_ctol(method::Symbol,C)
+    method == :default && return 0.0
+    method == :eigmax && return eps(eigmax(C))
+    error(lazy"_get_ctol: Method $method not recognized")
+end
+
 @doc raw"""
         fit_routine(model::Function,xdata::AbstractArray{<:Real},ydata::AbstractArray{ADerrors.uwreal},npar; kwargs...)
         fit_routine(model::Function,xdata::AbstractArray{uwreal},ydata::AbstractArray{ADerrors.uwreal},npar; kwargs...)
@@ -42,34 +86,41 @@ F(q_i) = \begin{cases}
 # Keyword parameters:
 
   - `wpm`: window parameter used by ADerrors to computes the errors. Default to `Dict{Int64,Vector{Float64}}()`.
-           This is used both when computing the error of the data and when computing the covariance matrix through `ADerrors.cov`
+           This is used both when computing the error of the data and when computing the covariance matrix through `ADerrors.sym_cov`
            It accept a dictionary with ensemble id as keys (either `String` or `Int64`) and `Vector{Float64}` as value.
            See also ADerrors documentation.
 
   - `W::AbstractVecOrMat{Float64}`: Weight matrix/vector. If `W` is a `Vector` the fit is perfomed uncorrelated ,otherwise is correlated.
-                                    default to `Vector{Float64}()`
+                                    default to `Vector{Float64}()`. If it is empty, one is constructed base on `corr`
 
   - `corr::Bool`: flag used to generated `W` when not given. Default to `true`. If `false`, `W = [1/y.err^2 for y in ydata]`.
-                  If `true` the covariance matrix of the data is used to compute `W` as `W = C^{-1}`.
+                  If `true` the covariance matrix of the data is used to compute `W` as `W = inv(Symmetric(C))`.
 
   - `C::AbstractMatrix`: covariance matrix used to compute W. Default to `Matrix{Float64}(undef, 0, 0)`.
                          If `W` is not given, and `corr` is `true`, then it is used to compute `W`.
-                         If need to computed `W` but not given,  then `C = ADerrors.cov(ydata,wpm)`. See also ADerrors documentation.
-                         If available, it will be used to better estimate the fit pvalue and the expected chi-square,
-                         but it will not be computed if not available at this point.
+                         Since its `C` is needed to compute both `pval` and `chiexp`, if not given, it is computed using `cov_func`
+
+  - `cov_func::Function`: Function used to compute the covariance matrix. It is called as `cov_func(ydata,wpm)`. Default to `ADerrors.cov_sym`
+
+  - `Ctol::Float64`: Tolerance used in the computation of `pval` by `ADerrors`. If `Ctol = 0.0`, `ADerrors` uses a simple Choleski decomposition where needed and it will throw and error if `C` is not definitive positive. If `Ctol > 0.0`, then `ADerrors` uses a Pivoted (RowMaximum) Choleski decomposition and `Ctol` is used to filter eigevalues mode too small. Default to `-1.0`
+
+  - `Ctol_method::Symbol`: method used to infer `Ctol` if not give. If `Ctol<0.0`, then `Ctol_method` select which method is used. Methods accepted:
+     - `:default`: Default method, sets `Ctol = 0.0`
+     - `:eigmax`: sets "Ctol = eps(eigmax(Ctol))`
 
   - `guess::Vector{Float64}`: Initial guess for the parameter used in the fit routine. If not given, default to `fill(0.5,npar)`.
                               If `xdata isa Vector{uwreal}`, the mean value of `xdata` are used as guess for the relevant `q_i` parameters.
 
-  - `logfile`: handle to a logfile. If `nothing`, no log will be written. It can be `IO` file or a custom log structure that has
+  - `logfile`: handle to a logfile. If `NoPrint()`, no log will be written. It can be `IO` file or a custom log structure that has
                an overloading for `print()` and `println()`.
 
 # Returns
-It returns a `NamedTuple` with names:
-  - `:par`:    fit parameter as `Vector{uwreal}`
-  - `:chi2`:   chisquare,
-  - `:chiexp`: chisquare expected
-  - `:pval`:   pvalue
+It returns a `FitRes` with fields:
+  - `par`:    fit parameter as `Vector{uwreal}`
+  - `chi2`:   chisquare,
+  - `chiexp`: chisquare expected
+  - `pval`:   pvalue
+  - `extra`:  A `NamedTuple` with field `corr::Bool`.  `corr` is true if the fit is correlated.
 """
 function fit_routine(model::Function,
                      xdata::AbstractArray{<:Real},
@@ -80,38 +131,26 @@ function fit_routine(model::Function,
                      W::AbstractArray{Float64}=Vector{Float64}(),
                      guess::AbstractVector{Float64} = fill(0.5,npar),
                      logfile = NoPrint(),
-                     C::AbstractArray{Float64} = Matrix{Float64}(undef,0,0));
-
+                     C::AbstractArray{Float64} = Matrix{Float64}(undef, 0, 0),
+                     Ctol::Float64 = -1.0,
+                     Ctol_method::Symbol = :default,
+                     cov_func::Function = ADerrors.cov_sym);
     nobs = length(ydata)
-    if length(xdata)!=nobs
-        error("xdata and ydata must be of the same size")
-    end
+    length(xdata)!=nobs &&  error("xdata and ydata must be of the same size")
 
     [uwerr(y, wpm) for y in ydata]
-    if length(W) ==0
-        if corr
-            C = length(C) ==0 ? ADerrors.cov_sym(ydata) : C
-            W = LinearAlgebra.pinv(C);
-            W = (W'+W)*0.5
-        else
-            W = [1/y.err^2 for y in ydata]
-        end
-    end
+
+    isempty(C) && (C = cov_func(ydata,wpm))
+
+    Ctol < 0.0 && (Ctol = __get_ctol(Ctol_method,C))
+
+    isempty(W) && (W = __compute_W(ydata,corr,C))
 
     fit = LsqFit.curve_fit(model,xdata,ADerrors.value.(ydata),W,guess)
 
     chisq(p,d) = get_chi(model,xdata,p,d,W)
     chi2 = sum(fit.resid.^2)
-    par = fit_error(chisq,LsqFit.coef(fit),ydata,wpm,W,false)
-    # if the fit is correlated  we have already C, no need to recompute it.
-    chiexp  = ADerrors.chiexp(chisq,
-                              LsqFit.coef(fit),
-                              ydata,
-                              wpm,
-                              C=length(C)==0 ? nothing : C,
-                              W=W)
-
-    pval = pvalue(chisq,chi2,LsqFit.coef(fit),ydata,W,wpm=wpm,C=C)
+    par, chiexp, pval = fit_error(chisq,LsqFit.coef(fit),ydata,wpm,W,true,C,pval=true,Ctol=Ctol)
 
     compute_error_for_logging(logfile,par);
     println(logfile, "fit_routine output:")
@@ -124,7 +163,7 @@ function fit_routine(model::Function,
     println(logfile, "\t\tchiexp:     ", chiexp)
     println(logfile, "\t\tpvalue:     ", pval)
 
-    return FitRes(par=par,chi2=chi2,chiexp=chiexp,pval=pval)
+    return FitRes(par=par, chi2=chi2, chiexp=chiexp, pval=pval, corr=corr)
 end
 
 """
@@ -148,7 +187,10 @@ function fit_routine(model::Function,
                      corr::Bool = true,
                      guess::AbstractArray = fill(0.5,npar),
                      logfile = NoPrint(),
-                     C::AbstractArray = Float64[])
+                     C::AbstractArray{Float64} = Matrix{Float64}(undef, 0, 0),
+                     Ctol::Float64 = -1.0,
+                     Ctol_method::Symbol = :default,
+                     cov_func::Function = ADerrors.cov_sym)
     Nx = length(xdata)
     if (Nx != length(ydata))
         error("[FitRoutines] Error: xdata and ydata must have the same dimension")
@@ -162,19 +204,13 @@ function fit_routine(model::Function,
         error("[FitRoutines] Error: C does not have the correct sizes")
     end
 
-    if corr
-        C = length(C) ==0 ? GammaMethod.cov_AD(data) : C
-        W = length(W) ==0 ? LinearAlgebra.pinv(W) : W
-    else
-        W = length(W) ==0 ? [1/yy.err^2 for yy in data] : W
-    end
+    isempty(C) && (C = cov_func(ydata,wpm))
+    isempty(W) && (W = __compute_W(ydata,corr,C))
 
     f(q,p) = [i<=Nx ? model(q[i],p) : q[i-Nx] for i in 1:Ndata]
     fit_func(x,p) = f(view(p,npar+1:npar+Nx),view(p,1:npar))
     new_guess = [guess; value.(xdata)]
-    fit = fit_routine(fit_func,zeros(Ndata),data,npar+Nx,
-                      guess=new_guess, wpm=wpm,corr=corr,
-                      W=W,C=C,logfile=NoPrint())
+    fit = fit_routine(fit_func,zeros(Ndata),data,npar+Nx,guess=new_guess, wpm=wpm, corr=corr, W=W, C=C, logfile=NoPrint(), Ctol = Ctol, Ctol_method=Ctol_method, cov_function = cov_function)
 
     compute_error_for_logging(logfile,fit.par);
     println(logfile, "fit_routine output:")
@@ -216,12 +252,15 @@ function fit_routine(models::AbstractArray{<:Function},
                      ydata::AbstractArray{<:AbstractArray{ADerrors.uwreal}},
                      npar::Int64;
                      W = Float64[],
-                     C = Matrix{Float64}(undef,0,0),
                      wpm::AbstractDict = Dict{Int64,Vector{Float64}}(),
                      corr::Bool = true,
                      guess::AbstractArray = fill(0.5,npar),
                      logfile = NoPrint(),
-                     )
+                     C::AbstractArray{Float64} = Matrix{Float64}(undef, 0, 0),
+                     Ctol::Float64 = -1.0,
+                     Ctol_method::Symbol = :default,
+                     cov_func::Function = ADerrors.cov_sym)
+
     Nmodel = length(models)
     ndata = length.(xdata)
     Ntotal = sum(ndata);
@@ -252,8 +291,8 @@ function fit_routine(models::AbstractArray{<:Function},
     end
     make_matrix(M::T where {T<:AbstractMatrix}) = M
 
-    WW = length(W)==0 ? W : make_matrix(W);
-    CC = length(C)==0 ? C : make_matrix(C);
+    WW = !isempty(W) ? make_matrix(W) : W ;
+    CC = !isempty(C) ? make_matrix(C) : C ;
 
     function Model(x::Vector,p::AbstractVector;models =models, Nmodel::Int64=Nmodel,ndata::Vector{Int64}=ndata)
         res = Vector{Any}(undef,Nmodel)
@@ -269,9 +308,9 @@ function fit_routine(models::AbstractArray{<:Function},
         return vcat(res...)
     end
 
-    fit = fit_routine(Model,X,Y,npar,guess = guess,W=WW,C=CC,corr=corr,logfile=NoPrint(),wpm=wpm)
+    fit = fit_routine(Model,X,Y,npar,guess = guess,W=WW,C=CC,corr=corr,logfile=NoPrint(),wpm=wpm,Ctol=Ctol, Ctol_method = Ctol_method, cov_func = cov_func)
     compute_error_for_logging(logfile, fit.par)
-    flag = typeof(xdata) <: AbstractArray{<:AbstractArray{ADerrors.uwreal}}
+    flag = eltype(xdata) <: AbstractArray{ADerrors.uwreal}
     println(logfile, "fit_routine output:")
     if flag
         println(logfile, "\t\txdata carries uncertainty")

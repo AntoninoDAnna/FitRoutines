@@ -6,10 +6,11 @@ It exectutes all the fit compatible with `tmin`, `tmax`. Return a  `Vector{FitRe
 """
 function fit_scan(model,xdata,ydata,npar;
                   tmin = 1, tmax = lastindex(xdata),
-                  W = Float64[],
                   logfile = NoPrint(),
                   wpm   = Dict{Int64,Vector{Float64}}(),
-                  C     = Matrix{Float64}(undef, 0,0),
+                  Ctol::Float64 = -1.0,
+                  Ctol_method::Symbol = :eigmax,
+                  cov_func::Function = ADerrors.cov_sym,
                   guess = fill(0.5, npar),
                   corr = false)
 
@@ -21,12 +22,10 @@ function fit_scan(model,xdata,ydata,npar;
     fits =Vector{Union{FitRes,Missing}}(missing, length(ranges))
     for (idx,r) in enumerate(ranges)
         length(r)<=npar && continue;
-
         println(logfile, "="^80, "\n")
         Printf.@printf logfile "Fit range  [%.5e, %.5e]\n" xdata[r[1]] xdata[r[end]]
         fit = try
-            fit_routine(model,xdata[r],ydata[r],npar, W=W,C=C,
-                        guess=guess,logfile=logfile, corr=corr)
+            fit_routine(model,xdata[r],ydata[r],npar, Ctol = Ctol, Ctol_method=Ctol_method, cov_func = cov_func, guess=guess,logfile=logfile, corr=corr)
         catch e
             Printf.@printf logfile "Error during fit routine: %s\n" e.msg
             @error "Error in fit range [%.5e,%.5e]\n" xdata[r[1]] xdata[r[end]]

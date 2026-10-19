@@ -26,12 +26,14 @@ function find_first(model::Function, xdata::AbstractArray, ydata::AbstractArray,
                     condition::Function,
                     idx_min = 1, idx_max = lastindex(xdata),
                     step=1,
-                    W = Float64[],
                     logfile = FitRoutines.NoPrint(),
                     wpm   = Dict{Int64,Vector{Float64}}(),
-                    C     = Matrix{Float64}(undef, 0,0),
                     guess = fill(0.5, npar),
-                    corr = false)
+                    corr = false,
+                    Ctol = -1.0,
+                    Ctol_method = :default,
+                    cov_func = ADerrors.cov_sym)
+
     println(logfile,"Starting fits: find first mode")
     let (xmin, xmax) = __get_scanned_region(xdata,idx_min,idx_max)
         Printf.@printf logfile "Scanning region xdata in [%.12e, %.12e]\n" xmin xmax
@@ -44,14 +46,15 @@ function find_first(model::Function, xdata::AbstractArray, ydata::AbstractArray,
         println(logfile, "="^80, "\n")
         Printf.@printf logfile "Fit range [%.5e, %.5e]\n" xdata[r[1]] xdata[r[end]]
         fit = try
-            fit_routine(model,xdata[r],ydata[r],npar, W=W,C=C,
-                        wpm=wpm, guess=guess,logfile=logfile,
-                        corr=corr)
+            fit_routine(model, xdata[r], ydata[r], npar, wpm=wpm, guess=guess, logfile=logfile, corr=corr, Ctol = Ctol, Ctol_method = Ctol_method, cov_func = cov_func)
         catch e
+            e isa Base.InterruptException && rethrow(e)
             Printf.@printf logfile "Error during fit routine: \n"
-            showerror(logfile, e)
-            @error Printf.@printf "Error in fit range [%.5e,%.5e]\n" xdata[r[1]] xdata[r[end]]
+            showerror(logfile, e,catch_backtrace())
+            println(logfile)
+            @debug Printf.@printf "Error in fit range [%.5e,%.5e]\n" xdata[r[1]] xdata[r[end]]
             showerror(stdout, e)
+            println()
             continue;
         end
         condition(fit) && return FitRes(;fit..., x_range = xdata[r[[1,end]]], idx_range = r[[1,end]])
@@ -74,7 +77,19 @@ If an error occurs during the exectution of [`fit_routine`](@ref), the  error is
 If a fit is found, it return a `Vector{FitRes}`, each  with `idx_range` and `x_range` storing the range  of the successful fit. `idx_range` stores the range in index notation, `x_range` stores the range in `xdata`, such that `x_range = xdata[idx_range]`.
 If no fit is found, it return `nothing`
 """
-function find_all(model::Function, xdata::AbstractArray, ydata::AbstractArray, npar::Int64; condition::Function, idx_min = 1, idx_max = lastindex(xdata), W = Float64[], logfile = FitRoutines.NoPrint(), wpm   = Dict{Int64,Vector{Float64}}(), C     = Matrix{Float64}(undef, 0,0), guess = fill(0.5, npar), corr = false)
+function find_all(model::Function,
+                  xdata::AbstractArray,
+                  ydata::AbstractArray,
+                  npar::Int64;
+                  condition::Function,
+                  idx_min = 1,
+                  idx_max = lastindex(xdata),
+                  logfile = FitRoutines.NoPrint(),
+                  wpm = Dict{Int64,Vector{Float64}}(),
+                  guess = fill(0.5, npar),
+                  Ctol = -1.0,
+                  Ctol_method = :default,
+                  cov_func = ADerrors.cov_sym)
     println(logfile,"Starting fits: find first mode")
     let (xmin,xmax)  = __get_scanned_region(xdata,idx_min,idx_max)
         Printf.@printf logfile "Scanning region xdata in [%.12e, %.12e]\n" xmin xmax
@@ -88,11 +103,11 @@ function find_all(model::Function, xdata::AbstractArray, ydata::AbstractArray, n
         println(logfile, "="^80, "\n")
         Printf.@printf logfile "Fit range  [%.5e, %.5e]\n" xdata[r[1]] xdata[r[end]]
         fit = try
-            fit_routine(model,xdata[r],ydata[r],npar, W=W,C=C,
-                        guess=guess,logfile=logfile, corr=corr)
+            fit_routine(model, xdata[r], ydata[r], npar, wpm=wpm, guess=guess, logfile=logfile, corr=corr, Ctol = Ctol,
+                        Ctol_method = Ctol_method, cov_func = cov_func)
         catch e
             Printf.@printf logfile "Error during fit routine: %s\n" e.msg
-            @error Printf.@printf "Error in fit range [%.5e,%.5e]\n" xdata[r[1]] xdata[r[end]]
+            @debug Printf.@printf "Error in fit range [%.5e,%.5e]\n" xdata[r[1]] xdata[r[end]]
             continue;
         end
         condition(fit) && push!(res,FitRes(;fit..., x_range = xdata[r[[1,end]]], idx_range = r[[1,end]]))
